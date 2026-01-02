@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kuromoji 載入診斷工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6">Kuromoji 載入診斷工具</h1>
+
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <h2 class="text-xl font-semibold mb-4">測試狀態</h2>
+            <div id="status" class="space-y-2"></div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6">
+            <h2 class="text-xl font-semibold mb-4">詳細日誌</h2>
+            <div id="logs" class="space-y-1 text-sm font-mono bg-gray-50 p-4 rounded max-h-96 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+
+        function addLog(message, type = 'info') {
+            const colors = {
+                info: 'text-blue-600',
+                success: 'text-green-600',
+                error: 'text-red-600',
+                warning: 'text-yellow-600'
+            };
+            const time = new Date().toLocaleTimeString();
+            logsDiv.innerHTML += `<div class="${colors[type]}">[${time}] ${message}</div>`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const colors = {
+                info: 'bg-blue-100 text-blue-800',
+                success: 'bg-green-100 text-green-800',
+                error: 'bg-red-100 text-red-800',
+                warning: 'bg-yellow-100 text-yellow-800'
+            };
+            statusDiv.innerHTML = `<div class="p-4 rounded ${colors[type]}">${message}</div>`;
+        }
+
+        async function testCDN(name, url) {
+            addLog(`測試 CDN: ${name}`, 'info');
+            addLog(`URL: ${url}`, 'info');
+
+            try {
+                const startTime = Date.now();
+                const response = await fetch(url, {
+                    method: 'HEAD',
+                    mode: 'no-cors'
+                });
+                const duration = Date.now() - startTime;
+                addLog(`${name} 響應時間: ${duration}ms`, 'success');
+                return true;
+            } catch (error) {
+                addLog(`${name} 失敗: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function testKuromojiLib(name, scriptUrl) {
+            addLog(`測試 Kuromoji 腳本: ${name}`, 'info');
+
+            return new Promise((resolve) => {
+                const script = document.createElement('script');
+                script.src = scriptUrl;
+                script.onload = () => {
+                    addLog(`${name} 腳本載入成功`, 'success');
+                    resolve(true);
+                };
+                script.onerror = () => {
+                    addLog(`${name} 腳本載入失敗`, 'error');
+                    resolve(false);
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        async function testKuromojiDict(name, dictPath) {
+            if (typeof kuromoji === 'undefined') {
+                addLog('Kuromoji 未定義，無法測試字典', 'error');
+                return false;
+            }
+
+            addLog(`測試 Kuromoji 字典載入: ${name}`, 'info');
+            updateStatus(`正在測試: ${name}...`, 'info');
+
+            const startTime = Date.now();
+
+            try {
+                const tokenizer = await Promise.race([
+                    new Promise((resolve, reject) => {
+                        kuromoji.builder({
+                            dicPath: dictPath
+                        }).build((err, tokenizer) => {
+                            if (err) reject(err);
+                            else resolve(tokenizer);
+                        });
+                    }),
+                    new Promise((_, reject) =>
+                        setTimeout(() => reject(new Error('超時')), 60000)
+                    )
+                ]);
+
+                const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+                addLog(`${name} 字典載入成功！耗時: ${duration} 秒`, 'success');
+
+                // Test tokenization
+                const result = tokenizer.tokenize('これはテストです');
+                addLog(`分詞測試成功，結果: ${result.length} 個 token`, 'success');
+
+                updateStatus(`✓ ${name} 測試成功！耗時: ${duration} 秒`, 'success');
+                return true;
+            } catch (error) {
+                const duration = ((Date.now() - startTime) / 1000).toFixed(2);
+                addLog(`${name} 載入失敗: ${error.message} (耗時: ${duration} 秒)`, 'error');
+                updateStatus(`✗ ${name} 測試失敗`, 'error');
+                return false;
+            }
+        }
+
+        async function runTests() {
+            addLog('========== 開始診斷 ==========', 'info');
+            updateStatus('正在執行診斷測試...', 'info');
+
+            // Test 1: Load Kuromoji library
+            addLog('', 'info');
+            addLog('步驟 1: 測試 Kuromoji 庫載入', 'info');
+            const libLoaded = await testKuromojiLib(
+                'jsDelivr',
+                'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.min.js'
+            );
+
+            if (!libLoaded) {
+                updateStatus('Kuromoji 庫載入失敗，無法繼續測試', 'error');
+                return;
+            }
+
+            // Wait a bit for library to initialize
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // Test 2: Test different CDN sources for dictionary
+            addLog('', 'info');
+            addLog('步驟 2: 測試字典檔案 CDN', 'info');
+
+            const cdnSources = [
+                {
+                    name: 'jsDelivr (cdn.jsdelivr.net)',
+                    path: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+                },
+                {
+                    name: 'jsDelivr (fastly.jsdelivr.net)',
+                    path: 'https://fastly.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+                },
+                {
+                    name: 'unpkg',
+                    path: 'https://unpkg.com/kuromoji@0.1.2/dict/'
+                }
+            ];
+
+            for (const source of cdnSources) {
+                addLog('', 'info');
+                const success = await testKuromojiDict(source.name, source.path);
+                if (success) {
+                    addLog('', 'success');
+                    addLog(`========== 診斷完成 ==========`, 'success');
+                    addLog(`建議使用: ${source.name}`, 'success');
+                    updateStatus(`✓ 找到可用的 CDN: ${source.name}`, 'success');
+                    return;
+                }
+                // Wait before trying next source
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+
+            addLog('', 'error');
+            addLog('========== 診斷完成 ==========', 'error');
+            addLog('所有 CDN 來源都無法使用', 'error');
+            updateStatus('✗ 所有 CDN 來源都無法使用', 'error');
+        }
+
+        // Start tests when page loads
+        window.addEventListener('load', () => {
+            addLog('頁面載入完成，準備開始測試...', 'info');
+            setTimeout(runTests, 1000);
+        });
+    </script>
+</body>
+</html>

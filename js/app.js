@@ -22,64 +22,125 @@ function getReading(reading) {
 // Initialize with fallback CDN sources
 async function initialize() {
     const loadingIndicator = document.getElementById('loadingIndicator');
+    let loadStartTime = Date.now();
 
-    // Multiple CDN sources to try
+    // Check if kuromoji is available
+    if (typeof kuromoji === 'undefined') {
+        console.error('Kuromoji 庫未載入');
+        loadingIndicator.innerHTML = `
+            <div class="text-center p-6">
+                <div class="text-red-500 mb-4">
+                    <p class="text-xl font-semibold mb-2">⚠️ 載入失敗</p>
+                    <p class="text-sm mb-2">Kuromoji 庫無法載入，請檢查網路連線</p>
+                </div>
+                <button onclick="location.reload()" class="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-all">
+                    重新載入頁面
+                </button>
+            </div>
+        `;
+        return;
+    }
+
+    console.log('Kuromoji 庫已載入，準備載入字典...');
+
+    // Multiple CDN sources to try with shorter timeout
     const cdnSources = [
         {
-            name: 'jsDelivr (Primary)',
-            path: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+            name: 'jsDelivr',
+            path: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/',
+            timeout: 45000  // 45 seconds
         },
         {
-            name: 'jsDelivr (fastly)',
-            path: 'https://fastly.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+            name: 'jsDelivr (Fastly)',
+            path: 'https://fastly.jsdelivr.net/npm/kuromoji@0.1.2/dict/',
+            timeout: 45000
         },
         {
             name: 'unpkg',
-            path: 'https://unpkg.com/kuromoji@0.1.2/dict/'
+            path: 'https://unpkg.com/kuromoji@0.1.2/dict/',
+            timeout: 45000
         }
     ];
 
     let lastError = null;
+    let attemptStartTime;
 
     for (let i = 0; i < cdnSources.length; i++) {
         const source = cdnSources[i];
+        attemptStartTime = Date.now();
 
         try {
+            // Update loading UI with progress
             loadingIndicator.innerHTML = `
-                <div class="flex items-center justify-center gap-4">
+                <div class="flex flex-col items-center justify-center gap-4">
                     <div class="loading-spinner"></div>
-                    <div class="text-gray-600">
-                        <p>正在載入形態素分析引擎...</p>
-                        <p class="text-sm mt-1">嘗試來源 ${i + 1}/${cdnSources.length}: ${source.name}</p>
+                    <div class="text-gray-600 text-center">
+                        <p class="font-medium">正在載入形態素分析引擎...</p>
+                        <p class="text-sm mt-2">來源 ${i + 1}/${cdnSources.length}: ${source.name}</p>
+                        <p class="text-xs mt-1 text-gray-500">字典檔案約 20MB，首次載入需要較長時間</p>
+                        <div class="mt-3 w-64 bg-gray-200 rounded-full h-2">
+                            <div class="bg-blue-500 h-2 rounded-full transition-all duration-300" style="width: ${((i) / cdnSources.length * 100)}%"></div>
+                        </div>
                     </div>
                 </div>
             `;
 
-            console.log(`嘗試載入 Kuromoji (${i + 1}/${cdnSources.length}): ${source.name}`);
+            console.log(`[${i + 1}/${cdnSources.length}] 嘗試載入: ${source.name}`);
             console.log(`字典路徑: ${source.path}`);
+            console.log(`超時設定: ${source.timeout}ms (${source.timeout / 1000}秒)`);
 
-            // Try to load with 30 second timeout for each attempt
+            // Create a loading progress tracker
+            const progressInterval = setInterval(() => {
+                const elapsed = ((Date.now() - attemptStartTime) / 1000).toFixed(1);
+                console.log(`載入中... 已耗時 ${elapsed} 秒`);
+            }, 5000);
+
+            // Try to load with timeout
             tokenizer = await Promise.race([
                 new Promise((resolve, reject) => {
-                    kuromoji.builder({
-                        dicPath: source.path
-                    }).build((err, tokenizer) => {
-                        if (err) {
-                            console.error(`${source.name} 載入錯誤:`, err);
-                            reject(err);
-                        } else {
-                            console.log(`${source.name} 載入成功！`);
-                            resolve(tokenizer);
-                        }
-                    });
+                    try {
+                        kuromoji.builder({
+                            dicPath: source.path
+                        }).build((err, tokenizer) => {
+                            clearInterval(progressInterval);
+                            if (err) {
+                                console.error(`${source.name} 建構錯誤:`, err);
+                                reject(new Error(`建構失敗: ${err.message || err}`));
+                            } else {
+                                const loadTime = ((Date.now() - attemptStartTime) / 1000).toFixed(2);
+                                console.log(`✓ ${source.name} 載入成功！耗時: ${loadTime} 秒`);
+                                resolve(tokenizer);
+                            }
+                        });
+                    } catch (err) {
+                        clearInterval(progressInterval);
+                        console.error(`${source.name} 異常:`, err);
+                        reject(err);
+                    }
                 }),
                 new Promise((_, reject) =>
-                    setTimeout(() => reject(new Error(`${source.name} 載入超時`)), 30000)
+                    setTimeout(() => {
+                        clearInterval(progressInterval);
+                        reject(new Error(`載入超時 (${source.timeout / 1000}秒)`));
+                    }, source.timeout)
                 )
             ]);
 
             // If we get here, loading succeeded
-            console.log('Kuromoji 初始化完成');
+            const totalTime = ((Date.now() - loadStartTime) / 1000).toFixed(2);
+            console.log(`========================================`);
+            console.log(`✓ Kuromoji 初始化完成！總耗時: ${totalTime} 秒`);
+            console.log(`使用來源: ${source.name}`);
+            console.log(`========================================`);
+
+            // Test the tokenizer
+            try {
+                const testResult = tokenizer.tokenize('テスト');
+                console.log(`分詞測試成功，結果:`, testResult);
+            } catch (err) {
+                console.warn('分詞測試失敗:', err);
+            }
+
             loadingIndicator.classList.add('hidden');
             document.getElementById('mainContent').classList.remove('hidden');
 
@@ -89,43 +150,64 @@ async function initialize() {
             return; // Success, exit function
 
         } catch (error) {
-            console.error(`${source.name} 失敗:`, error.message);
+            const attemptTime = ((Date.now() - attemptStartTime) / 1000).toFixed(2);
+            console.error(`✗ ${source.name} 失敗 (耗時 ${attemptTime}秒):`, error.message);
             lastError = error;
 
             // If this is not the last source, continue to next one
             if (i < cdnSources.length - 1) {
-                console.log('嘗試下一個來源...');
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before next attempt
+                console.log(`等待 2 秒後嘗試下一個來源...`);
+                await new Promise(resolve => setTimeout(resolve, 2000));
                 continue;
             }
         }
     }
 
     // All sources failed
-    console.error('所有 CDN 來源都載入失敗');
+    const totalTime = ((Date.now() - loadStartTime) / 1000).toFixed(2);
+    console.error('========================================');
+    console.error(`✗ 所有 CDN 來源都載入失敗 (總耗時 ${totalTime}秒)`);
+    console.error('========================================');
+
     loadingIndicator.innerHTML = `
-        <div class="text-center p-6">
+        <div class="text-center p-6 max-w-3xl mx-auto">
             <div class="text-red-500 mb-4">
                 <p class="text-xl font-semibold mb-2">⚠️ 載入失敗</p>
                 <p class="text-sm mb-2">已嘗試所有可用的 CDN 來源，但都無法載入字典檔案</p>
-                <p class="text-xs text-gray-500">最後錯誤: ${lastError ? lastError.message : '未知錯誤'}</p>
+                <p class="text-xs text-gray-500 mb-1">最後錯誤: ${lastError ? lastError.message : '未知錯誤'}</p>
+                <p class="text-xs text-gray-500">總耗時: ${totalTime} 秒</p>
             </div>
-            <div class="bg-blue-50 p-4 rounded-lg text-left max-w-2xl mx-auto">
-                <p class="font-semibold text-gray-900 mb-2">可能的解決方案：</p>
+            <div class="bg-blue-50 p-4 rounded-lg text-left mb-4">
+                <p class="font-semibold text-gray-900 mb-2">可能的原因：</p>
+                <ul class="list-disc list-inside space-y-1 text-sm text-gray-700">
+                    <li>網路連線不穩定或速度過慢</li>
+                    <li>防火牆或網路設定封鎖了 CDN 訪問</li>
+                    <li>所在地區無法訪問這些 CDN</li>
+                    <li>瀏覽器安全設定阻止了跨域請求</li>
+                </ul>
+            </div>
+            <div class="bg-yellow-50 p-4 rounded-lg text-left mb-4">
+                <p class="font-semibold text-gray-900 mb-2">建議解決方案：</p>
                 <ol class="list-decimal list-inside space-y-1 text-sm text-gray-700">
-                    <li>檢查網路連線是否正常</li>
-                    <li>確認防火牆或網路設定沒有封鎖 CDN 訪問</li>
-                    <li>嘗試使用 VPN 更換網路環境</li>
+                    <li>檢查網路連線，確保速度足夠（需下載約 20MB 檔案）</li>
+                    <li>嘗試使用 VPN 切換到其他地區</li>
+                    <li>關閉瀏覽器擴充功能（如廣告攔截器）</li>
+                    <li>使用無痕模式或其他瀏覽器重試</li>
                     <li>清除瀏覽器快取後重新整理頁面</li>
                     <li>稍後再試（CDN 可能暫時維護中）</li>
                 </ol>
                 <p class="text-xs text-gray-600 mt-3">
-                    已嘗試的 CDN: ${cdnSources.map(s => s.name).join(', ')}
+                    已嘗試: ${cdnSources.map(s => s.name).join(', ')}
                 </p>
             </div>
-            <button onclick="location.reload()" class="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-all">
-                重新載入頁面
-            </button>
+            <div class="flex gap-3 justify-center">
+                <button onclick="location.reload()" class="bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-all">
+                    重新載入頁面
+                </button>
+                <a href="debug.html" class="inline-block bg-gray-500 text-white px-6 py-2 rounded-lg hover:bg-gray-600 transition-all">
+                    開啟診斷工具
+                </a>
+            </div>
         </div>
     `;
 }
