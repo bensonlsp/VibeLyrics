@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日文解析器 - 日文學習神器</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.min.js"></script>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="bg-gray-50 transition-all duration-300">
+    <div class="min-h-screen p-4 md:p-8">
+        <!-- Header -->
+        <div class="max-w-7xl mx-auto mb-8">
+            <div class="flex justify-between items-center">
+                <div>
+                    <h1 class="text-4xl font-bold text-gray-900 mb-2">日文解析器</h1>
+                    <p class="text-gray-600">日文學習神器 - 極簡、優雅、高效</p>
+                </div>
+                <div class="flex gap-4 flex-wrap items-center">
+                    <!-- Furigana Toggle -->
+                    <button id="furiganaToggle" class="px-4 py-2 bg-white rounded-xl shadow-sm hover:shadow-md transition-all text-gray-700 font-medium">
+                        <span id="furiganaToggleText">隱藏振假名</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Indicator -->
+        <div id="loadingIndicator" class="max-w-7xl mx-auto mb-8 p-6 bg-white rounded-xl shadow-sm">
+            <div class="flex items-center justify-center gap-4">
+                <div class="loading-spinner"></div>
+                <p class="text-gray-600">正在載入形態素分析引擎...</p>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div id="mainContent" class="max-w-7xl mx-auto hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-4 gap-6">
+                <!-- Left Panel: Text Input & Display -->
+                <div class="lg:col-span-3 space-y-6">
+                    <!-- Input Area -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <h2 class="text-xl font-semibold text-gray-900 mb-2">貼上日文</h2>
+                        <div class="mb-4 text-sm text-gray-600 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                            <p class="mb-1">💡 <strong>使用說明：</strong></p>
+                            <ul class="list-disc list-inside space-y-1 ml-2">
+                                <li>本應用程式可以解析日文，自動添加振假名</li>
+                                <li>點擊單詞可以查看意思和讀音</li>
+                                <li>可以將單詞加入生字簿，方便日後複習</li>
+                            </ul>
+                        </div>
+                        <textarea
+                            id="lyricsInput"
+                            class="w-full h-48 p-4 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-none transition-all text-base leading-relaxed"
+                            placeholder="請在此貼上或輸入日文內容...&#10;&#10;例如：&#10;私は学生です。&#10;今日はいい天気ですね。"
+                        ></textarea>
+                        <button
+                            id="parseButton"
+                            class="mt-4 w-full bg-blue-500 text-white py-3 rounded-lg hover:bg-blue-600 transition-all font-medium shadow-sm hover:shadow-md"
+                        >
+                            解析日文
+                        </button>
+                    </div>
+
+                    <!-- Parsed Text Display -->
+                    <div id="parsedLyricsContainer" class="bg-white rounded-xl shadow-sm p-6 hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold text-gray-900">已解析日文</h2>
+                            <!-- Kana Type Selector -->
+                            <div class="bg-gray-50 rounded-lg p-1 flex gap-1">
+                                <button id="hiraganaBtn" class="px-3 py-1.5 rounded-md text-sm font-medium transition-all kana-active">
+                                    あ 平假名
+                                </button>
+                                <button id="katakanaBtn" class="px-3 py-1.5 rounded-md text-sm font-medium transition-all text-gray-600 hover:text-gray-900">
+                                    ア 片假名
+                                </button>
+                            </div>
+                        </div>
+                        <div id="parsedLyrics" class="text-lg leading-relaxed space-y-4"></div>
+                    </div>
+                </div>
+
+                <!-- Right Panel: Vocabulary Deck Only -->
+                <div class="space-y-6">
+                    <!-- Vocabulary Deck -->
+                    <div class="bg-white rounded-xl shadow-sm p-6">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-semibold text-gray-900">生字簿</h2>
+                            <button id="clearDeckButton" class="text-sm text-red-500 hover:text-red-700 transition-all">
+                                清空
+                            </button>
+                        </div>
+                        <button id="startReviewButton" class="w-full mb-4 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-3 rounded-lg hover:from-purple-600 hover:to-pink-600 transition-all font-medium shadow-sm hover:shadow-md hidden">
+                            🎴 開始複習 (<span id="reviewCount">0</span> 個單詞)
+                        </button>
+                        <div id="vocabularyDeck" class="space-y-3">
+                            <p class="text-gray-500 text-center py-8">尚無收藏的單詞</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Flashcard Review Modal -->
+    <div id="flashcardModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header">
+                <button class="modal-close" onclick="closeFlashcardModal()">×</button>
+                <div class="flex justify-between items-center">
+                    <h2 class="text-xl font-semibold text-gray-900">複習模式</h2>
+                    <div class="text-sm text-gray-600">
+                        <span id="flashcardProgress">1/10</span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-body">
+                <!-- Flashcard Container -->
+                <div id="flashcardContainer" class="flashcard-wrapper">
+                    <div class="flashcard" id="flashcard">
+                        <div class="flashcard-front">
+                            <div class="text-5xl font-bold text-gray-900 mb-4" id="flashcardWord"></div>
+                            <div class="text-2xl text-gray-600 mb-6" id="flashcardReading"></div>
+                            <p class="text-sm text-gray-500">點擊卡片查看釋義</p>
+                        </div>
+                        <div class="flashcard-back">
+                            <div class="text-3xl font-bold text-gray-900 mb-3" id="flashcardBackWord"></div>
+                            <div class="text-lg text-gray-600 mb-4" id="flashcardBackReading"></div>
+                            <div id="flashcardMeaning" class="text-gray-700 leading-relaxed"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-3 mt-6">
+                    <button id="againButton" class="flex-1 bg-red-500 text-white py-3 rounded-lg hover:bg-red-600 transition-all font-medium">
+                        😓 再看一次
+                    </button>
+                    <button id="goodButton" class="flex-1 bg-green-500 text-white py-3 rounded-lg hover:bg-green-600 transition-all font-medium">
+                        😊 記住了
+                    </button>
+                </div>
+
+                <!-- Progress Bar -->
+                <div class="mt-4 bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Word Detail Modal -->
+    <div id="wordModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button class="modal-close" onclick="closeWordModal()">×</button>
+                <div class="text-3xl font-bold text-gray-900 mb-2" id="modalWord"></div>
+                <div class="text-lg text-gray-600" id="modalReading"></div>
+            </div>
+            <div class="modal-body">
+                <div class="flex gap-2 mb-4">
+                    <span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm font-medium" id="modalPos"></span>
+                    <span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm" id="modalBaseForm"></span>
+                </div>
+                <div id="modalMeaning" class="text-gray-700 leading-relaxed mb-4">
+                    <div class="flex items-center justify-center py-4">
+                        <div class="loading-spinner"></div>
+                    </div>
+                </div>
+                <div class="flex gap-2">
+                    <button id="modalAddToDeckButton" class="flex-1 bg-green-500 text-white py-2.5 rounded-lg hover:bg-green-600 transition-all font-medium">
+                        加入生字簿
+                    </button>
+                    <button id="modalSpeakButton" class="flex-1 bg-purple-500 text-white py-2.5 rounded-lg hover:bg-purple-600 transition-all font-medium">
+                        🔊 發音
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- External Scripts -->
+    <script src="js/dictionary.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
