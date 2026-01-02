@@ -5,7 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>日文解析器 - 日文學習神器</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.min.js" onerror="loadKuromojiBackup()"></script>
+    <script>
+        // Backup function to load Kuromoji from alternative CDN if primary fails
+        function loadKuromojiBackup() {
+            console.log('主要 CDN 載入失敗，嘗試備用來源...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/kuromoji@0.1.2/build/kuromoji.min.js';
+            script.onerror = function() {
+                console.error('所有 Kuromoji CDN 來源都失敗');
+                alert('無法載入日文分析引擎，請檢查網路連線或稍後再試');
+            };
+            document.head.appendChild(script);
+        }
+    </script>
     <link rel="stylesheet" href="css/styles.css">
 </head>
 <body class="bg-gray-50 transition-all duration-300">

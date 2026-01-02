@@ -19,35 +19,115 @@ function getReading(reading) {
     return useHiragana ? katakanaToHiragana(reading) : reading;
 }
 
-// Initialize
+// Initialize with fallback CDN sources
 async function initialize() {
-    try {
-        // Load kuromoji tokenizer
-        tokenizer = await new Promise((resolve, reject) => {
-            kuromoji.builder({
-                dicPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
-            }).build((err, tokenizer) => {
-                if (err) reject(err);
-                else resolve(tokenizer);
-            });
-        });
+    const loadingIndicator = document.getElementById('loadingIndicator');
 
-        document.getElementById('loadingIndicator').classList.add('hidden');
-        document.getElementById('mainContent').classList.remove('hidden');
+    // Multiple CDN sources to try
+    const cdnSources = [
+        {
+            name: 'jsDelivr (Primary)',
+            path: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+        },
+        {
+            name: 'jsDelivr (fastly)',
+            path: 'https://fastly.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+        },
+        {
+            name: 'unpkg',
+            path: 'https://unpkg.com/kuromoji@0.1.2/dict/'
+        }
+    ];
 
-        renderVocabularyDeck();
+    let lastError = null;
 
-        // Update kana type buttons state
-        updateKanaButtonsState();
-    } catch (error) {
-        console.error('初始化失敗:', error);
-        document.getElementById('loadingIndicator').innerHTML = `
-            <div class="text-center text-red-500">
-                <p class="text-xl font-semibold mb-2">載入失敗</p>
-                <p class="text-sm">${error.message}</p>
-            </div>
-        `;
+    for (let i = 0; i < cdnSources.length; i++) {
+        const source = cdnSources[i];
+
+        try {
+            loadingIndicator.innerHTML = `
+                <div class="flex items-center justify-center gap-4">
+                    <div class="loading-spinner"></div>
+                    <div class="text-gray-600">
+                        <p>正在載入形態素分析引擎...</p>
+                        <p class="text-sm mt-1">嘗試來源 ${i + 1}/${cdnSources.length}: ${source.name}</p>
+                    </div>
+                </div>
+            `;
+
+            console.log(`嘗試載入 Kuromoji (${i + 1}/${cdnSources.length}): ${source.name}`);
+            console.log(`字典路徑: ${source.path}`);
+
+            // Try to load with 30 second timeout for each attempt
+            tokenizer = await Promise.race([
+                new Promise((resolve, reject) => {
+                    kuromoji.builder({
+                        dicPath: source.path
+                    }).build((err, tokenizer) => {
+                        if (err) {
+                            console.error(`${source.name} 載入錯誤:`, err);
+                            reject(err);
+                        } else {
+                            console.log(`${source.name} 載入成功！`);
+                            resolve(tokenizer);
+                        }
+                    });
+                }),
+                new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error(`${source.name} 載入超時`)), 30000)
+                )
+            ]);
+
+            // If we get here, loading succeeded
+            console.log('Kuromoji 初始化完成');
+            loadingIndicator.classList.add('hidden');
+            document.getElementById('mainContent').classList.remove('hidden');
+
+            renderVocabularyDeck();
+            updateKanaButtonsState();
+
+            return; // Success, exit function
+
+        } catch (error) {
+            console.error(`${source.name} 失敗:`, error.message);
+            lastError = error;
+
+            // If this is not the last source, continue to next one
+            if (i < cdnSources.length - 1) {
+                console.log('嘗試下一個來源...');
+                await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1 second before next attempt
+                continue;
+            }
+        }
     }
+
+    // All sources failed
+    console.error('所有 CDN 來源都載入失敗');
+    loadingIndicator.innerHTML = `
+        <div class="text-center p-6">
+            <div class="text-red-500 mb-4">
+                <p class="text-xl font-semibold mb-2">⚠️ 載入失敗</p>
+                <p class="text-sm mb-2">已嘗試所有可用的 CDN 來源，但都無法載入字典檔案</p>
+                <p class="text-xs text-gray-500">最後錯誤: ${lastError ? lastError.message : '未知錯誤'}</p>
+            </div>
+            <div class="bg-blue-50 p-4 rounded-lg text-left max-w-2xl mx-auto">
+                <p class="font-semibold text-gray-900 mb-2">可能的解決方案：</p>
+                <ol class="list-decimal list-inside space-y-1 text-sm text-gray-700">
+                    <li>檢查網路連線是否正常</li>
+                    <li>確認防火牆或網路設定沒有封鎖 CDN 訪問</li>
+                    <li>嘗試使用 VPN 更換網路環境</li>
+                    <li>清除瀏覽器快取後重新整理頁面</li>
+                    <li>稍後再試（CDN 可能暫時維護中）</li>
+                </ol>
+                <p class="text-xs text-gray-600 mt-3">
+                    已嘗試的 CDN: ${cdnSources.map(s => s.name).join(', ')}
+                </p>
+            </div>
+            <button onclick="location.reload()" class="mt-4 bg-blue-500 text-white px-6 py-2 rounded-lg hover:bg-blue-600 transition-all">
+                重新載入頁面
+            </button>
+        </div>
+    `;
 }
 
 // Parse Japanese Text
@@ -64,7 +144,7 @@ async function parseLyrics(text) {
     const lines = text.split('\n');
     let tokenIndex = 0;
 
-    lines.forEach((line, lineIdx) => {
+    lines.forEach((line) => {
         if (line.trim() === '') {
             parsedLyricsDiv.innerHTML += '<br>';
             return;
