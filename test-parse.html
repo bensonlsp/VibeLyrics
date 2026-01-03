@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>解析功能測試</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/build/kuromoji.min.js"></script>
+</head>
+<body class="bg-gray-50 p-8">
+    <div class="max-w-4xl mx-auto">
+        <h1 class="text-3xl font-bold mb-6">日文解析功能測試</h1>
+
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4">狀態檢查</h2>
+            <div id="status" class="space-y-2"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4">測試輸入</h2>
+            <textarea
+                id="testInput"
+                class="w-full h-32 border border-gray-300 rounded p-3 mb-4"
+                placeholder="輸入日文進行測試...">放送番組の同時配信・見逃し配信</textarea>
+            <button
+                id="testButton"
+                class="bg-blue-500 text-white px-6 py-2 rounded hover:bg-blue-600">
+                測試解析
+            </button>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow">
+            <h2 class="text-xl font-semibold mb-4">解析結果</h2>
+            <div id="result" class="min-h-[100px] p-4 bg-gray-50 rounded"></div>
+        </div>
+
+        <div class="bg-white p-6 rounded-lg shadow mt-6">
+            <h2 class="text-xl font-semibold mb-4">控制台日誌</h2>
+            <div id="logs" class="space-y-1 text-sm font-mono bg-gray-900 text-green-400 p-4 rounded max-h-96 overflow-y-auto"></div>
+        </div>
+    </div>
+
+    <script>
+        const statusDiv = document.getElementById('status');
+        const logsDiv = document.getElementById('logs');
+        let tokenizer = null;
+
+        // Override console.log to show in page
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        function addLog(message, type = 'log') {
+            const colors = {
+                log: 'text-green-400',
+                error: 'text-red-400',
+                warn: 'text-yellow-400'
+            };
+            const time = new Date().toLocaleTimeString();
+            logsDiv.innerHTML += `<div class="${colors[type]}">[${time}] ${message}</div>`;
+            logsDiv.scrollTop = logsDiv.scrollHeight;
+        }
+
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            addLog(args.join(' '), 'log');
+        };
+
+        console.error = function(...args) {
+            originalError.apply(console, args);
+            addLog('ERROR: ' + args.join(' '), 'error');
+        };
+
+        console.warn = function(...args) {
+            originalWarn.apply(console, args);
+            addLog('WARN: ' + args.join(' '), 'warn');
+        };
+
+        // Check environment
+        function checkEnvironment() {
+            statusDiv.innerHTML = `
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold">Kuromoji 庫:</span>
+                        <span class="${typeof kuromoji !== 'undefined' ? 'text-green-600' : 'text-red-600'}">
+                            ${typeof kuromoji !== 'undefined' ? '✓ 已載入' : '✗ 未載入'}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold">Tokenizer:</span>
+                        <span class="${tokenizer ? 'text-green-600' : 'text-yellow-600'}">
+                            ${tokenizer ? '✓ 已初始化' : '⏳ 載入中...'}
+                        </span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-semibold">環境:</span>
+                        <span class="text-blue-600">${window.location.hostname || 'localhost'}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Initialize Kuromoji
+        async function initKuromoji() {
+            console.log('開始載入 Kuromoji...');
+            checkEnvironment();
+
+            try {
+                tokenizer = await new Promise((resolve, reject) => {
+                    kuromoji.builder({
+                        dicPath: 'dict/'
+                    }).build((err, tokenizer) => {
+                        if (err) {
+                            console.error('Kuromoji 建構錯誤:', err);
+                            reject(err);
+                        } else {
+                            console.log('Kuromoji 載入成功！');
+                            resolve(tokenizer);
+                        }
+                    });
+                });
+
+                checkEnvironment();
+                console.log('初始化完成');
+
+                // Test tokenize
+                const testResult = tokenizer.tokenize('テスト');
+                console.log('分詞測試:', testResult);
+
+            } catch (error) {
+                console.error('載入失敗:', error);
+                alert('Kuromoji 載入失敗：' + error.message);
+            }
+        }
+
+        // Test parse function
+        function testParse() {
+            console.log('========== 開始測試解析 ==========');
+
+            const text = document.getElementById('testInput').value;
+            console.log('輸入文本:', text);
+
+            if (!tokenizer) {
+                alert('Tokenizer 尚未載入！');
+                return;
+            }
+
+            try {
+                const tokens = tokenizer.tokenize(text);
+                console.log('分詞結果:', tokens);
+
+                const resultDiv = document.getElementById('result');
+                resultDiv.innerHTML = '';
+
+                tokens.forEach((token, idx) => {
+                    const span = document.createElement('span');
+                    span.className = 'inline-block m-1 p-2 bg-blue-100 rounded';
+                    span.innerHTML = `
+                        <div class="font-bold">${token.surface_form}</div>
+                        <div class="text-sm text-gray-600">${token.reading || 'N/A'}</div>
+                        <div class="text-xs text-gray-500">${token.pos}</div>
+                    `;
+                    resultDiv.appendChild(span);
+                });
+
+                console.log('解析完成！');
+
+            } catch (error) {
+                console.error('解析失敗:', error);
+                alert('解析失敗：' + error.message);
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('頁面載入完成');
+            checkEnvironment();
+            initKuromoji();
+
+            document.getElementById('testButton').addEventListener('click', testParse);
+        });
+    </script>
+</body>
+</html>

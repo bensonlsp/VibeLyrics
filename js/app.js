@@ -214,84 +214,140 @@ async function initialize() {
 
 // Parse Japanese Text
 async function parseLyrics(text) {
-    if (!tokenizer) {
-        alert('分析引擎尚未載入完成，請稍候...');
-        return;
-    }
+    console.log('========== 開始解析日文 ==========');
+    console.log('輸入文本:', text);
+    console.log('文本長度:', text.length);
 
-    const tokens = tokenizer.tokenize(text);
-    const parsedLyricsDiv = document.getElementById('parsedLyrics');
-    parsedLyricsDiv.innerHTML = '';
-
-    const lines = text.split('\n');
-    let tokenIndex = 0;
-
-    lines.forEach((line) => {
-        if (line.trim() === '') {
-            parsedLyricsDiv.innerHTML += '<br>';
+    try {
+        // Check if tokenizer is loaded
+        if (!tokenizer) {
+            console.error('Tokenizer 尚未載入');
+            alert('分析引擎尚未載入完成，請稍候...');
             return;
         }
 
-        const lineDiv = document.createElement('div');
-        lineDiv.className = 'mb-2';
+        console.log('Tokenizer 狀態: 已載入');
+        console.log('開始分詞...');
 
-        const lineTokens = [];
-        let lineText = '';
+        // Tokenize the text
+        const tokens = tokenizer.tokenize(text);
+        console.log(`分詞完成，共 ${tokens.length} 個 token`);
+        console.log('Token 範例:', tokens.slice(0, 3));
 
-        while (tokenIndex < tokens.length) {
-            const token = tokens[tokenIndex];
-            lineText += token.surface_form;
-            lineTokens.push(token);
-            tokenIndex++;
-
-            if (lineText.length >= line.length) break;
+        const parsedLyricsDiv = document.getElementById('parsedLyrics');
+        if (!parsedLyricsDiv) {
+            console.error('找不到 parsedLyrics 元素');
+            alert('頁面元素錯誤，請重新整理頁面');
+            return;
         }
 
-        lineTokens.forEach(token => {
-            const span = document.createElement('span');
-            span.className = 'word-token';
-            const displayReading = getReading(token.reading || token.surface_form);
+        parsedLyricsDiv.innerHTML = '';
+        console.log('已清空解析結果區域');
 
-            // Store token data for click handler
-            const tokenData = {
-                word: token.surface_form,
-                reading: displayReading,
-                pos: token.pos,
-                baseForm: token.basic_form || token.surface_form
-            };
+        const lines = text.split('\n');
+        console.log(`文本分為 ${lines.length} 行`);
 
-            span.dataset.token = JSON.stringify(tokenData);
+        let tokenIndex = 0;
 
-            if (token.surface_form.match(/^[ぁ-んァ-ヶー一-龯]+$/)) {
-                const ruby = document.createElement('ruby');
-                ruby.textContent = token.surface_form;
+        lines.forEach((line, lineNumber) => {
+            console.log(`處理第 ${lineNumber + 1} 行: "${line}"`);
 
-                const rt = document.createElement('rt');
-                rt.textContent = displayReading;
-                // Store original katakana reading for conversion
-                rt.dataset.originalReading = token.reading || token.surface_form;
-
-                ruby.appendChild(rt);
-                span.appendChild(ruby);
-            } else {
-                span.textContent = token.surface_form;
+            if (line.trim() === '') {
+                parsedLyricsDiv.innerHTML += '<br>';
+                return;
             }
 
-            // Add click event listener - bind to the span element
-            span.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                selectWord(this, token);
+            const lineDiv = document.createElement('div');
+            lineDiv.className = 'mb-2';
+
+            const lineTokens = [];
+            let lineText = '';
+
+            while (tokenIndex < tokens.length) {
+                const token = tokens[tokenIndex];
+                lineText += token.surface_form;
+                lineTokens.push(token);
+                tokenIndex++;
+
+                if (lineText.length >= line.length) break;
+            }
+
+            console.log(`第 ${lineNumber + 1} 行有 ${lineTokens.length} 個 token`);
+
+            lineTokens.forEach((token, tokenIdx) => {
+                try {
+                    const span = document.createElement('span');
+                    span.className = 'word-token';
+                    const displayReading = getReading(token.reading || token.surface_form);
+
+                    // Store token data for click handler
+                    const tokenData = {
+                        word: token.surface_form,
+                        reading: displayReading,
+                        pos: token.pos,
+                        baseForm: token.basic_form || token.surface_form
+                    };
+
+                    span.dataset.token = JSON.stringify(tokenData);
+
+                    if (token.surface_form.match(/^[ぁ-んァ-ヶー一-龯]+$/)) {
+                        const ruby = document.createElement('ruby');
+                        ruby.textContent = token.surface_form;
+
+                        const rt = document.createElement('rt');
+                        rt.textContent = displayReading;
+                        // Store original katakana reading for conversion
+                        rt.dataset.originalReading = token.reading || token.surface_form;
+
+                        ruby.appendChild(rt);
+                        span.appendChild(ruby);
+                    } else {
+                        span.textContent = token.surface_form;
+                    }
+
+                    // Add click event listener - bind to the span element
+                    span.addEventListener('click', function(e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        selectWord(this, token);
+                    });
+
+                    lineDiv.appendChild(span);
+                } catch (tokenErr) {
+                    console.error(`處理 token ${tokenIdx} 時出錯:`, tokenErr);
+                    console.error('問題 token:', token);
+                }
             });
 
-            lineDiv.appendChild(span);
+            parsedLyricsDiv.appendChild(lineDiv);
         });
 
-        parsedLyricsDiv.appendChild(lineDiv);
-    });
+        console.log('DOM 更新完成');
 
-    document.getElementById('parsedLyricsContainer').classList.remove('hidden');
-    document.getElementById('parsedLyricsContainer').scrollIntoView({ behavior: 'smooth' });
+        // Show the parsed lyrics container
+        const container = document.getElementById('parsedLyricsContainer');
+        if (!container) {
+            console.error('找不到 parsedLyricsContainer 元素');
+            return;
+        }
+
+        container.classList.remove('hidden');
+        console.log('顯示解析結果容器');
+
+        // Scroll to the result
+        container.scrollIntoView({ behavior: 'smooth' });
+        console.log('滾動到解析結果');
+
+        console.log('========== 解析完成 ==========');
+
+    } catch (error) {
+        console.error('========== 解析失敗 ==========');
+        console.error('錯誤類型:', error.name);
+        console.error('錯誤訊息:', error.message);
+        console.error('錯誤堆疊:', error.stack);
+
+        alert(`解析失敗：${error.message}\n\n請查看瀏覽器控制台獲取詳細資訊`);
+    }
 }
 
 // Select Word - Show in Modal
@@ -895,11 +951,38 @@ function updateParsedLyricsKana() {
 
 // Event Listeners
 document.addEventListener('DOMContentLoaded', () => {
-    document.getElementById('parseButton').addEventListener('click', () => {
-        const text = document.getElementById('lyricsInput').value;
+    console.log('DOMContentLoaded 事件觸發');
+
+    // Parse button
+    const parseButton = document.getElementById('parseButton');
+    const lyricsInput = document.getElementById('lyricsInput');
+
+    if (!parseButton) {
+        console.error('找不到 parseButton 元素！');
+    } else {
+        console.log('parseButton 元素找到，綁定點擊事件');
+    }
+
+    if (!lyricsInput) {
+        console.error('找不到 lyricsInput 元素！');
+    } else {
+        console.log('lyricsInput 元素找到');
+    }
+
+    parseButton.addEventListener('click', () => {
+        console.log('========== 解析按鈕被點擊 ==========');
+        console.log('Tokenizer 狀態:', tokenizer ? '已載入' : '未載入');
+
+        const text = lyricsInput.value;
+        console.log('輸入框內容:', text);
+        console.log('內容長度:', text.length);
+        console.log('去除空白後長度:', text.trim().length);
+
         if (text.trim()) {
+            console.log('開始執行 parseLyrics 函數...');
             parseLyrics(text);
         } else {
+            console.warn('輸入框為空');
             alert('請先輸入日文');
         }
     });
