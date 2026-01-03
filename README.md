@@ -27,7 +27,7 @@
 
 - **前端框架**：原生 JavaScript (ES6+)
 - **UI 框架**：Tailwind CSS
-- **日文分析**：Kuromoji.js (形態素分析)
+- **日文分析**：Kuromoji.js (形態素分析) - 使用本地字典檔案
 - **API 整合**：Jisho.org Dictionary API
 - **語音合成**：Web Speech API
 - **數據存儲**：localStorage
@@ -37,11 +37,17 @@
 ```
 VibeLyrics/
 ├── index.html          # 主頁面
+├── debug.html          # 診斷工具頁面
 ├── css/
 │   └── styles.css      # 樣式表
 ├── js/
 │   ├── app.js          # 主要應用邏輯
 │   └── dictionary.js   # 基本字典數據
+├── dict/               # Kuromoji 字典檔案（約 15MB）
+│   ├── base.dat.gz
+│   ├── check.dat.gz
+│   └── ... (共 13 個檔案)
+├── TESTING.md          # 測試和調試指南
 └── README.md           # 項目說明
 ```
 
@@ -138,22 +144,29 @@ npx http-server
 
 ## 📝 注意事項
 
-1. **網絡連接**：首次載入需要下載 Kuromoji 字典（約 2-3MB）
+1. **首次載入**：使用本地字典檔案（約 15MB），首次載入需要幾秒鐘，之後會被瀏覽器快取
 2. **API 限制**：Jisho.org API 可能有速率限制，內建字典作為後備
 3. **語音支援**：日文發音需要系統安裝日文語音包
 4. **數據存儲**：使用 localStorage，清除瀏覽器數據會丟失生字簿
+5. **線上版本**：https://bensonlsp.github.io/VibeLyrics/
 
 ## 🔧 技術細節
 
 ### Kuromoji 形態素分析
 ```javascript
-// 使用 Kuromoji 進行日文分詞
+// 使用本地字典檔案進行日文分詞（更快更可靠）
 kuromoji.builder({
-    dicPath: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/'
+    dicPath: 'dict/'  // 使用本地字典檔案，避免依賴外部 CDN
 }).build((err, tokenizer) => {
     const tokens = tokenizer.tokenize(text);
 });
 ```
+
+**為什麼使用本地字典？**
+- ✅ 更快的載入速度（從 GitHub Pages 載入）
+- ✅ 更高的可靠性（不依賴第三方 CDN）
+- ✅ 避免 CORS 和網路問題
+- ✅ 支援離線使用（如果被快取）
 
 ### 閃卡複習算法
 - 「再看一次」：將卡片移到隊列末尾，確保重複複習

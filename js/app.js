@@ -43,20 +43,20 @@ async function initialize() {
 
     console.log('Kuromoji 庫已載入，準備載入字典...');
 
-    // Multiple CDN sources to try with shorter timeout
+    // Use local dictionary files (much faster and more reliable!)
     const cdnSources = [
         {
-            name: 'jsDelivr',
+            name: '本地字典檔案 (Local)',
+            path: 'dict/',
+            timeout: 30000  // 30 seconds (should be much faster for local files)
+        },
+        {
+            name: 'jsDelivr (備用)',
             path: 'https://cdn.jsdelivr.net/npm/kuromoji@0.1.2/dict/',
             timeout: 45000  // 45 seconds
         },
         {
-            name: 'jsDelivr (Fastly)',
-            path: 'https://fastly.jsdelivr.net/npm/kuromoji@0.1.2/dict/',
-            timeout: 45000
-        },
-        {
-            name: 'unpkg',
+            name: 'unpkg (備用)',
             path: 'https://unpkg.com/kuromoji@0.1.2/dict/',
             timeout: 45000
         }
