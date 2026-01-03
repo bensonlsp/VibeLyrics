@@ -4,23 +4,24 @@
 
 ## 檔案列表
 
-- `base.dat.gz` - 基礎字典檔案
-- `check.dat.gz` - 檢查檔案
-- `tid.dat.gz` - 詞 ID 檔案
-- `tid_pos.dat.gz` - 詞性標記檔案
-- `tid_map.dat.gz` - 詞 ID 映射檔案
-- `unk.dat.gz` - 未知詞檔案
-- `unk_pos.dat.gz` - 未知詞詞性檔案
-- `unk_map.dat.gz` - 未知詞映射檔案
-- `unk_char.dat.gz` - 未知詞字符檔案
-- `unk_compat.dat.gz` - 未知詞兼容性檔案
-- `unk_invoke.dat.gz` - 未知詞調用檔案
-- `char.dat.gz` - 字符檔案
-- `connection.dat.gz` - 連接檔案
+- `base.dat.gz` - 基礎字典檔案（3.8MB）
+- `cc.dat.gz` - 字符類別檔案（1.6MB）**[重要]**
+- `check.dat.gz` - 檢查檔案（3.0MB）
+- `tid.dat.gz` - 詞 ID 檔案（1.5MB）
+- `tid_pos.dat.gz` - 詞性標記檔案（5.6MB）
+- `tid_map.dat.gz` - 詞 ID 映射檔案（1.4MB）
+- `unk.dat.gz` - 未知詞檔案（10KB）
+- `unk_pos.dat.gz` - 未知詞詞性檔案（10KB）
+- `unk_map.dat.gz` - 未知詞映射檔案（1.2KB）
+- `unk_char.dat.gz` - 未知詞字符檔案（306B）
+- `unk_compat.dat.gz` - 未知詞兼容性檔案（338B）
+- `unk_invoke.dat.gz` - 未知詞調用檔案（1.1KB）
+- `char.dat.gz` - 字符檔案（63B）
+- `connection.dat.gz` - 連接檔案（69B）
 
 ## 總大小
 
-約 15MB（壓縮後）
+約 17MB（壓縮後），14 個檔案
 
 ## 來源
 
